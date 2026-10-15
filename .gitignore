@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+*.draft.json
+*.log
+SKMHT.docx
+SKMHT - Copy.docx
+Fidusia.doc
+private/
+originals/
+uploads/
