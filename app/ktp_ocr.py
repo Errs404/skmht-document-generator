@@ -36,6 +36,8 @@ import subprocess
 import tempfile
 from io import BytesIO
 
+from . import ocr_format, textutil
+
 try:
     from PIL import Image, ImageEnhance, ImageFilter, ImageOps, UnidentifiedImageError
 except ImportError:  # Pesan runtime yang terarah diberikan oleh _require_pillow.
@@ -399,7 +401,8 @@ def ocr_image(data: bytes, filename: str = "", runner=None) -> dict:
 _LABEL_PATTERNS = (
     ("nik", r"N\s*[I1l]\s*K"),
     ("nama", r"N\s*a\s*m\s*a"),
-    ("tempat_lahir", r"T\s*e\s*m\s*p\s*a\s*t\s*/?\s*T\s*[gq]\s*l\.?\s*Lahir"),
+    ("tempat_lahir", r"T\s*e\s*m\s*p\s*a\s*t(?:\s*/?\s*T\s*[gq]\s*l\.?)?\s*Lahir"),
+    ("tanggal_lahir", r"T\s*a\s*n\s*g\s*g\s*a\s*l\s*Lahir"),
     ("jenis_kelamin", r"J\s*e\s*n\s*i\s*s\s*K\s*e\s*l\s*a\s*m\s*i\s*n"),
     ("agama", r"A\s*g\s*a\s*m\s*a"),
     ("status", r"S\s*t\s*a\s*t\s*u\s*s\s*P\s*e\s*r\s*k\s*a\s*w\s*i\s*n\s*a\s*n"),
@@ -488,10 +491,38 @@ def _digits_only(value: str) -> str:
     return re.sub(r"\D", "", value or "")
 
 def _first_label_value(text: str, label_pattern: str) -> str:
+    """Ambil nilai satu label tanpa meminjam field tetangga pada baris sama.
+
+    OCR/AI kadang meratakan beberapa baris KTP menjadi satu baris, atau
+    mengembalikan nilai yang masih diawali labelnya sendiri. Batas hanya
+    dikenali bila label berikutnya diikuti pemisah ``:``/``=`` agar kata sah
+    seperti ``DESA MAJU`` atau ``SUKADESA`` tidak dipotong.
+    """
     m = _label_regex(label_pattern).search(text)
     if not m:
         return ""
-    return _clean_value(m.group(1))
+    value = _clean_value(m.group(1))
+    if not value:
+        return ""
+
+    # Nilai AI dapat berupa "Kel/Desa: KRAJILAN ..." meski sudah ditempatkan
+    # setelah label kanonik. Buang hanya label identik yang berpemisah jelas.
+    repeated = re.match(
+        r"(?i)^\s*(?:" + label_pattern + r")\s*[:=]\s*", value)
+    if repeated:
+        value = value[repeated.end():]
+
+    # Potong tepat sebelum label KTP lain yang jelas pada baris yang sama.
+    # Syarat ':'/'=' mencegah substring nama desa dianggap sebagai label.
+    boundaries = []
+    for other_pattern in _LABELS.values():
+        hit = re.search(
+            r"(?i)(?<!\w)" + other_pattern + r"\s*[:=]", value)
+        if hit:
+            boundaries.append(hit.start())
+    if boundaries:
+        value = value[:min(boundaries)]
+    return _clean_value(value)
 
 def _parse_nik(text: str) -> tuple[str, str]:
     """Mengembalikan (nik, status); 16 digit hanya berarti format valid."""
@@ -519,37 +550,32 @@ def _parse_nik(text: str) -> tuple[str, str]:
         return found[0], "review"
     return "", "missing"
 
+def _valid_birth_date(raw: str) -> str:
+    dm = re.search(r"(\d{1,2})\s*[-/.\s]\s*(\d{1,2})\s*[-/.\s]\s*(\d{4})", raw or "")
+    if not dm:
+        return ""
+    day, month, year = map(int, dm.groups())
+    try:
+        import datetime
+        return datetime.date(year, month, day).isoformat()
+    except ValueError:
+        return ""
+
 def _parse_birth(text: str) -> dict:
-    """Mengurai 'Tempat/Tgl Lahir' menjadi tempat + tanggal (YYYY-MM-DD).
-
-    Hanya mengembalikan tanggal bila formatnya jelas (DD-MM-YYYY). Tidak
-    mengarang komponen yang hilang. Toleran terhadap ':' dan pemisah koma.
-    """
-    m = _label_regex(_LABELS["tempat_lahir"]).search(text)
-    if not m:
-        return {"tempat_lahir": "", "tanggal_lahir": "",
-                "birth_status": "missing"}
-    raw = _clean_value(m.group(1))
-    if not raw:
-        return {"tempat_lahir": "", "tanggal_lahir": "",
-                "birth_status": "missing"}
-
-    # Pisahkan tempat dan tanggal: tanggal muncul sebagai d/m/Y lewat '-'/'/'.
-    dm = re.search(r"(\d{1,2})\s*[-/.\s]\s*(\d{1,2})\s*[-/.\s]\s*(\d{4})", raw)
-    tempat = ""
-    tanggal = ""
-    status = "review"
+    """Parse combined KTP birth label or explicit separate place/date labels."""
+    place_raw = _first_label_value(text, _LABELS["tempat_lahir"])
+    date_raw = _first_label_value(text, _LABELS["tanggal_lahir"])
+    if not place_raw and not date_raw:
+        return {"tempat_lahir": "", "tanggal_lahir": "", "birth_status": "missing"}
+    dm = re.search(r"(\d{1,2})\s*[-/.\s]\s*(\d{1,2})\s*[-/.\s]\s*(\d{4})", place_raw)
     if dm:
-        tempat = _normalize_ws(raw[:dm.start()]).strip(" ,")
-        day, month, year = (int(dm.group(1)), int(dm.group(2)),
-                            int(dm.group(3)))
-        if 1 <= day <= 31 and 1 <= month <= 12 and 1900 <= year <= 2100:
-            tanggal = f"{year:04d}-{month:02d}-{day:02d}"
-            status = "format_valid" if tempat else "review"
+        tempat = _normalize_ws(place_raw[:dm.start()]).strip(" ,")
+        tanggal = _valid_birth_date(dm.group(0))
     else:
-        tempat = _normalize_ws(raw).strip(" ,")
-    return {"tempat_lahir": tempat, "tanggal_lahir": tanggal,
-            "birth_status": status}
+        tempat = _normalize_ws(place_raw).strip(" ,")
+        tanggal = _valid_birth_date(date_raw)
+    status = "format_valid" if tanggal and tempat else "review"
+    return {"tempat_lahir": tempat, "tanggal_lahir": tanggal, "birth_status": status}
 
 def _parse_alamat(text: str) -> dict:
     """Mengurai alamat KTP menjadi bagian terstruktur secara konservatif.
@@ -635,7 +661,9 @@ def parse_ktp_fields(text: str) -> dict:
     fields: dict[str, dict] = {}
 
     def put(key: str, value: str, status: str):
-        fields[key] = {"value": value, "status": status}
+        if key == "dusun":
+            value = textutil.strip_dusun_abbrev(value)
+        fields[key] = {"value": ocr_format.format_field(key, value), "status": status}
 
     # NIK
     nik, nik_status = _parse_nik(text)
@@ -704,8 +732,13 @@ def candidates_for_role(parsed: dict, role: str) -> dict:
         entry = fields.get(ktp_key)
         if not entry or not entry.get("value"):
             continue
+        value = entry["value"]
+        if ktp_key == "dusun":
+            value = textutil.strip_dusun_abbrev(value)
+            if not value:
+                continue
         out[form_key] = {
-            "value": entry["value"],
+            "value": value,
             "status": entry.get("status", "review"),
             "source": ktp_key,
         }

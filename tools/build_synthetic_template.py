@@ -132,7 +132,7 @@ def _build_body() -> str:
 
     # --- Kepala notaris (aktor sintetis tetap) -----------------------------
     paras.append(p(
-        _r("Pada hari ini, {{tanggal_akta_lengkap}}, hadir di hadapan saya "),
+        _r("Pada hari ini, {{tanggal_akta_lengkap}} {{tanggal_akta_tahun_terbilang}}, hadir di hadapan saya "),
         _r("NOTARIS CONTOH, Sarjana Hukum, Magister Kenotariatan", bold=True),
         _r(", yang berdasarkan Surat Keputusan Menteri Hukum dan Hak Asasi "
            "Manusia Republik Indonesia tanggal 1 Januari 2000 Nomor: "
