@@ -350,7 +350,7 @@ def _demo_form() -> dict:
         "surat_ukur_nomor": "1/D", "surat_ukur_tanggal": "2026-01-01",
         "luas_m2": "100", "nib": "1", "nop": "1",
         "lok_provinsi": "P", "lok_kabupaten": "K", "lok_kecamatan": "K",
-        "lok_desa": "D", "lok_jalan": "J",
+        "lok_desa": "D", "lok_jalan": "J", "lok_rt": "1", "lok_rw": "1",
     }
 
 
@@ -1241,7 +1241,7 @@ APP_JS = """
       'ht_jenis','ht_nomor','ht_desa_sertifikat','surat_ukur_nomor',
       'surat_ukur_tanggal','luas_m2','nib','nop']},
     {title:'Lokasi Objek', keys:[
-      'lok_provinsi','lok_kabupaten','lok_kecamatan','lok_desa','lok_jalan']}
+      'lok_provinsi','lok_kabupaten','lok_kecamatan','lok_desa','lok_jalan','lok_rt','lok_rw']}
   ];
   var SELECTS = {
     owner_title:['Tuan','Nyonya','Nona'],
@@ -1284,8 +1284,8 @@ APP_JS = """
       if(m.kind==='nik'){ control.setAttribute('inputmode','numeric'); control.setAttribute('maxlength','16'); }
       if(m.kind==='money'){ control.setAttribute('inputmode','numeric'); control.setAttribute('placeholder','mis. 50.000.000'); }
       if(m.kind==='text' && m.key==='nomor_akta'){ control.setAttribute('placeholder','mis. 12/ 2026'); }
-      if(m.kind==='text' && /\\.dusun$/.test(m.key)){ control.setAttribute('placeholder','mis. Nama Dusun (tanpa awalan "Dusun")'); }
-      if(m.kind==='text' && /\\.(rt|rw)$/.test(m.key)){ control.setAttribute('inputmode','numeric'); control.setAttribute('maxlength','3'); control.setAttribute('placeholder','angka, mis. 003 / 000'); }
+      if(m.kind==='text' && /(?:_|\\.)dusun$/.test(m.key)){ control.setAttribute('placeholder','mis. Nama Dusun (tanpa awalan "Dusun")'); }
+      if(m.kind==='text' && /(?:_|\\.)(rt|rw)$/.test(m.key)){ control.setAttribute('inputmode','numeric'); control.setAttribute('maxlength','3'); control.setAttribute('placeholder','angka, mis. 003 / 000'); }
     }
     if(m.required){ control.setAttribute('required',''); }
     wrap.appendChild(control);
@@ -1300,8 +1300,8 @@ APP_JS = """
     if(m.kind==='nik'){ return 'Tepat 16 digit angka.'; }
     if(m.kind==='money'){ return 'Angka rupiah, mis. 50.000.000.'; }
     if(m.key==='luas_m2'){ return 'Angka luas, mis. 1153 atau 1.153.'; }
-    if(/\\.(rt|rw)$/.test(m.key)){ return 'Angka 1-3 digit; nol di depan dipertahankan (mis. 003/000).'; }
-    if(/\\.dusun$/.test(m.key)){ return 'Isi teks dusun apa adanya (tanpa awalan "Dusun").'; }
+    if(/(?:_|\\.)(rt|rw)$/.test(m.key)){ return 'Angka 1-3 digit; nol di depan dipertahankan (mis. 003/000).'; }
+    if(/(?:_|\\.)dusun$/.test(m.key)){ return 'Isi teks dusun apa adanya (tanpa awalan "Dusun").'; }
     if(/\\.kabupaten$/.test(m.key)){ return 'Kosongkan untuk memakai default Kota Contoh.'; }
     return '';
   }

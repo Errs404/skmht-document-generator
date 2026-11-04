@@ -33,6 +33,7 @@ FORM = {
     "surat_ukur_tanggal": "2026-12-01", "luas_m2": "200", "nib": "1",
     "nop": "1", "lok_provinsi": "Jawa Barat", "lok_kabupaten": "Kab Z",
     "lok_kecamatan": "Kec Y", "lok_desa": "Desa X", "lok_jalan": "Jl. Contoh",
+    "lok_rt": "001", "lok_rw": "002",
 }
 
 

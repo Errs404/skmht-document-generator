@@ -394,7 +394,7 @@ class TestDocxPreservation(unittest.TestCase):
         # hanya satu baris "Jalan: <nilai pengguna> ;" yang tersisa dan tidak
         # ada sisa contoh.
         text = docx_text(self._render_default())
-        self.assertEqual(text.count("Jalan: Jalan Contoh RT 003 RW 06 ;"), 1)
+        self.assertEqual(text.count("Jalan: Jalan Contoh Rukun Tetangga 003, Rukun Warga 06. ;"), 1)
         self.assertNotIn("{{_remove_jalan_cont}}", text)
 
     def test_no_stale_land_identifiers(self):
@@ -763,7 +763,7 @@ class TestSyntheticTemplateContract(unittest.TestCase):
     def test_no_stale_jalan_continuation(self):
         # Marker pembersih mengosongkan paragraf sisa alamat jalan.
         text = docx_text(self._render(base_form()))
-        self.assertEqual(text.count("Jalan: Jalan Contoh RT 003 RW 06 ;"), 1)
+        self.assertEqual(text.count("Jalan: Jalan Contoh Rukun Tetangga 003, Rukun Warga 06. ;"), 1)
         self.assertNotIn("{{_remove_jalan_cont}}", text)
 
     def test_fixed_clauses_and_actors_preserved(self):

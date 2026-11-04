@@ -150,7 +150,9 @@ FIELDS = [
     ("lok_kabupaten", "Kabupaten/Kota", "text", True),
     ("lok_kecamatan", "Kecamatan", "text", True),
     ("lok_desa", "Desa/Kelurahan", "text", True),
-    ("lok_jalan", "Jalan / RT / RW", "text", True),
+    ("lok_jalan", "Jalan/Dusun", "text", True),
+    ("lok_rt", "RT lokasi tanah", "text", True),
+    ("lok_rw", "RW lokasi tanah", "text", True),
 ]
 
 FIELD_KEYS = {k for (k, *_rest) in FIELDS}
@@ -400,11 +402,37 @@ def parse_residence_card(text: str) -> tuple[str, str, str]:
     return rt, rw, roman
 
 
+def _location_parts(data: dict) -> dict:
+    """Accept only explicit, unambiguous legacy RT/RW suffixes."""
+    data = dict(data)
+    street = _clean(data.get("lok_jalan"))
+    match = re.fullmatch(
+        r"(.+?)\s+(?:Rukun Tetangga\s*|RT\s*)([0-9]{1,3})"
+        r"\s*[,/]?\s*(?:Rukun Warga\s*|RW\s*)([0-9]{1,3})\s*[.;]?",
+        street, re.IGNORECASE)
+    if match:
+        base, rt, rw = match.groups()
+        for key, value in (("lok_rt", rt), ("lok_rw", rw)):
+            supplied = _clean(data.get(key))
+            if supplied and supplied != value:
+                raise ValidationError("RT/RW lokasi tanah berbeda dengan isian Jalan/Dusun.")
+            data[key] = value
+        data["lok_jalan"] = base
+    return data
+
+
+def format_location(ctx: dict) -> str:
+    return (_clean(ctx["lok_jalan"]).rstrip(" ,;.")
+            + " Rukun Tetangga " + ctx["lok_rt"]
+            + ", Rukun Warga " + ctx["lok_rw"] + ".")
+
+
 def validate_and_build(data: dict) -> dict:
     """Memvalidasi input mentah dan mengembalikan konteks siap-render."""
     if not isinstance(data, dict):
         raise ValidationError("Data formulir tidak valid.")
 
+    data = _location_parts(data)
     ctx: dict = {}
 
     # Tentukan lebih dahulu apakah debitor sama dengan pemilik. Bila ya,
@@ -447,6 +475,13 @@ def validate_and_build(data: dict) -> dict:
                 raise ValidationError(f"{label} wajib diisi.")
             ctx[key] = text.upper() if key in (
                 "owner_nama", "spouse_nama", "debtor_nama") else text
+
+    for key, label in (("lok_rt", "RT lokasi tanah"), ("lok_rw", "RW lokasi tanah")):
+        if not re.fullmatch(r"[0-9]{1,3}", ctx.get(key, "")):
+            raise ValidationError(f"{label} wajib berupa angka 1-3 digit.")
+    ctx["lok_jalan"] = ctx["lok_jalan"].rstrip(" ,;.")
+    if not ctx["lok_jalan"]:
+        raise ValidationError("Jalan/Dusun wajib diisi.")
 
     if ctx["owner_title"].title() not in TITLES:
         raise ValidationError("Sapaan pemilik tanah tidak valid.")
@@ -630,7 +665,9 @@ def build_marker_values(ctx: dict) -> dict:
     values["lok_kabupaten"] = _clean(ctx["lok_kabupaten"])
     values["lok_kecamatan"] = _clean(ctx["lok_kecamatan"])
     values["lok_desa"] = _clean(ctx["lok_desa"])
-    values["lok_jalan"] = _clean(ctx["lok_jalan"])
+    values["lok_jalan"] = _clean(ctx["lok_jalan"]).rstrip(" ,;.")
+    values["lok_rt"] = ctx["lok_rt"]
+    values["lok_rw"] = ctx["lok_rw"]
 
     # --- Sanitasi: tolak nilai yang merusak marker/XML (gagal-keras) ------
     for key, value in list(values.items()):
@@ -680,6 +717,7 @@ REQUIRED_MARKER_KEYS = (
     "ht_teks", "surat_ukur_tanggal_teks", "surat_ukur_nomor",
     "luas_m2", "luas_kata", "nib", "nop",
     "lok_provinsi", "lok_kabupaten", "lok_kecamatan", "lok_desa", "lok_jalan",
+    "lok_rt", "lok_rw",
     "persetujuan_label",
 )
 
@@ -819,7 +857,7 @@ def canonical_summary(ctx: dict) -> dict:
             "lok_kabupaten": _clean(ctx["lok_kabupaten"]),
             "lok_kecamatan": _clean(ctx["lok_kecamatan"]),
             "lok_desa": _clean(ctx["lok_desa"]),
-            "lok_jalan": _clean(ctx["lok_jalan"]),
+            "lok_jalan": format_location(ctx),
         },
         "catatan": _summary_catatan(ctx),
     }

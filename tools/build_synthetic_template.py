@@ -240,7 +240,7 @@ def _build_body() -> str:
     # Baris jalan dipecah dua paragraf seperti bentuk Word asli; paragraf
     # kedua dibersihkan oleh marker ``_remove_jalan_cont`` (gagal-keras bila
     # bernilai non-kosong) sehingga tidak ada sisa teks contoh.
-    paras.append(p(_r("Jalan: {{lok_jalan}} ;", tab_leader=True),
+    paras.append(p(_r("Jalan: {{lok_jalan}} Rukun Tetangga {{lok_rt}}, Rukun Warga {{lok_rw}}. ;", tab_leader=True),
                    tabs=_TABS_HYPHEN))
     paras.append(p(_r("{{_remove_jalan_cont}}")))
 

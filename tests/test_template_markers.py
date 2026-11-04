@@ -129,6 +129,16 @@ class TestTemplateInventory(unittest.TestCase):
 
 
 class TestRenderedOutput(unittest.TestCase):
+    def test_location_marker_split_in_template(self):
+        form = base_form(lok_jalan="Jalan Contoh", lok_rt="003", lok_rw="06")
+        ctx = fields.validate_and_build(form)
+        values = fields.build_marker_values(ctx)
+        self.assertEqual(values["lok_jalan"], "Jalan Contoh")
+        self.assertEqual(values["lok_rt"], "003")
+        self.assertEqual(values["lok_rw"], "06")
+        text = docx_text(render(form))
+        self.assertIn("Jalan: Jalan Contoh Rukun Tetangga 003, Rukun Warga 06. ;", text)
+
     def test_split_date_tokens_and_original_punctuation(self):
         values = fields.build_marker_values(fields.validate_and_build(base_form()))
         main = "Kamis, tanggal 31 (tiga puluh satu) bulan Desember tahun 2026"
