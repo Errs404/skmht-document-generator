@@ -7,6 +7,11 @@ Acuan: penulisan tanggal & terbilang sesuai contoh pada dokumen asli.
 from __future__ import annotations
 
 import datetime as _dt
+import re
+
+# Awalan "Dsn"/"Dsn." yang berdiri sendiri (kata utuh), tanpa membedakan huruf
+# besar/kecil, diikuti titik opsional dan spasi.
+_DUSUN_ABBREV_RE = re.compile(r"^d\s*s\s*n\s*\.?\s+", re.IGNORECASE)
 
 # ---------------------------------------------------------------------------
 # Tanggal
@@ -261,3 +266,26 @@ def validate_nik(value: str, label: str = "NIK") -> str:
             f"{label} harus tepat 16 digit (saat ini {len(text)} digit)."
         )
     return text
+
+
+# ---------------------------------------------------------------------------
+# Teks dusun
+# ---------------------------------------------------------------------------
+
+def strip_dusun_abbrev(value) -> str:
+    """Buang singkatan "Dsn"/"Dsn." di depan teks dusun.
+
+    Singkatan hanya dibuang bila berdiri sendiri sebagai kata (diikuti spasi),
+    tanpa membedakan huruf besar/kecil, dengan titik opsional:
+    ``Dsn. Krajan`` / ``DSN KRAJAN`` -> ``Krajan`` / ``KRAJAN``.
+    Kata "Dusun" utuh dan nama yang memuat "dsn" di tengah kata (mis. "Sudsna")
+    TIDAK diubah. Teks selain awalan tersebut dipertahankan apa adanya.
+    """
+    if value is None:
+        return ""
+    text = str(value)
+    match = _DUSUN_ABBREV_RE.match(text.lstrip())
+    if not match:
+        return text.strip()
+    return text.lstrip()[match.end():].strip()
+

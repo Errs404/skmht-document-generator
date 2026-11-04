@@ -112,7 +112,7 @@ class TestTextUtil(unittest.TestCase):
         self.assertEqual(
             textutil.terbilang(1153), "seribu seratus lima puluh tiga")
         self.assertEqual(
-            textutil.terbilang(2026), "dua ribu dua puluh lima")
+            textutil.terbilang(2026), "dua ribu dua puluh enam")
         self.assertEqual(textutil.terbilang(50000000), "lima puluh juta")
         self.assertEqual(
             textutil.terbilang(75000000), "tujuh puluh lima juta")
@@ -127,13 +127,13 @@ class TestTextUtil(unittest.TestCase):
 
     def test_date_words(self):
         d = dt.date(2026, 12, 31)
-        self.assertEqual(textutil.day_name(d), "Rabu")
+        self.assertEqual(textutil.day_name(d), "Kamis")
         self.assertEqual(textutil.month_name(12), "Desember")
         self.assertEqual(textutil.format_tanggal_singkat(d), "31-12-2026")
         full = textutil.format_tanggal_lengkap(d)
         self.assertIn("tanggal 31 (tiga puluh satu)", full)
         self.assertIn("bulan Desember tahun 2026", full)
-        self.assertIn("(dua ribu dua puluh lima)", full)
+        self.assertIn("(dua ribu dua puluh enam)", full)
 
     def test_parse_date_invalid_rejected(self):
         with self.assertRaises(ValidationError):
@@ -1060,12 +1060,12 @@ class TestKtpParser(unittest.TestCase):
         self.assertEqual(f["nik"]["value"], "9999999999990001")
         self.assertEqual(f["nik"]["status"], "format_valid")
         self.assertEqual(f["nama"]["value"], "NAMA SINTETIS")
-        self.assertEqual(f["tempat_lahir"]["value"], "KOTA KARTIKA")
+        self.assertEqual(f["tempat_lahir"]["value"], "Kota Kartika")
         self.assertEqual(f["tanggal_lahir"]["value"], "1985-05-17")
         self.assertEqual(f["jenis_kelamin"]["value"], "Laki-Laki")
-        self.assertEqual(f["pekerjaan"]["value"], "PETANI/PEKEBUN")
-        self.assertIn("DUSUN BARU", f["alamat"]["value"])
-        self.assertEqual(f["kecamatan"]["value"], "KECAMATAN KARTIKA")
+        self.assertEqual(f["pekerjaan"]["value"], "Petani/Pekebun")
+        self.assertIn("Dusun Baru", f["alamat"]["value"])
+        self.assertEqual(f["kecamatan"]["value"], "Kecamatan Kartika")
 
     def test_screenshot_like_noise_keeps_detected_values_reviewable(self):
         text = (
@@ -1078,9 +1078,9 @@ class TestKtpParser(unittest.TestCase):
         fields = self.k.parse_ktp_fields(text)["fields"]
         self.assertEqual(fields["nik"]["value"], "1234567890123456")
         self.assertEqual(fields["nik"]["status"], "format_valid")
-        self.assertIn("DUSUN KARTIKA", fields["alamat"]["value"])
-        self.assertIn("DESA KARTIKAE", fields["kel_desa"]["value"])
-        self.assertIn("PELAJAR/MAHASISWA", fields["pekerjaan"]["value"])
+        self.assertIn("Dusun Kartika", fields["alamat"]["value"])
+        self.assertIn("Desa Kartikae", fields["kel_desa"]["value"])
+        self.assertIn("Pelajar/Mahasiswa", fields["pekerjaan"]["value"])
         self.assertEqual(fields["pekerjaan"]["status"], "review")
 
     def test_nik_format_valid_does_not_claim_ocr_correctness(self):

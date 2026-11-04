@@ -129,6 +129,34 @@ class TestTemplateInventory(unittest.TestCase):
 
 
 class TestRenderedOutput(unittest.TestCase):
+    def test_split_date_tokens_and_original_punctuation(self):
+        values = fields.build_marker_values(fields.validate_and_build(base_form()))
+        main = "Kamis, tanggal 31 (tiga puluh satu) bulan Desember tahun 2026"
+        year = "(dua ribu dua puluh enam)"
+        self.assertEqual(values["tanggal_akta_lengkap"], main)
+        self.assertEqual(values["tanggal_akta_tahun_terbilang"], year)
+        self.assertIn("Pada hari ini, " + main + " " + year + ",",
+                      docx_text(render(base_form())))
+
+    def test_only_identity_names_uppercase_including_signatures(self):
+        form = base_form(owner_nama="Budi Santoso", spouse_nama="Siti Aminah",
+                         same_as_owner="tidak", debtor_nama="Agus Salim",
+                         debtor_pekerjaan="PNS")
+        ctx = fields.validate_and_build(form)
+        text = docx_text(render(form))
+        for role, name in (("owner", "BUDI SANTOSO"), ("spouse", "SITI AMINAH"),
+                           ("debtor", "AGUS SALIM")):
+            self.assertEqual(ctx[role + "_nama"], name)
+            self.assertIn(name, text)
+            self.assertEqual(fields.canonical_summary(ctx)[role]["nama"], name)
+        self.assertGreaterEqual(text.count("BUDI SANTOSO"), 2)
+        self.assertGreaterEqual(text.count("SITI AMINAH"), 2)
+        for value in ("Lahir di Kota Contoh", "Petani/Pekebun", "Ibu Rumah Tangga",
+                      "Desa Contoh Satu", "Kecamatan Contoh Dua", "PNS"):
+            self.assertIn(value, text)
+        for value in ("LAHIR DI KOTA CONTOH", "PETANI/PEKEBUN", "DESA CONTOH SATU"):
+            self.assertNotIn(value, text)
+
     def test_no_marker_leftover(self):
         text = docx_text(render(base_form()))
         self.assertNotIn("{{", text)

@@ -288,11 +288,11 @@ class TestOcrResidenceMapping(unittest.TestCase):
     def test_local_owner_candidates_use_new_structure(self):
         parsed = ktp_ocr.parse_ktp_fields(self.SAMPLE)
         c = ktp_ocr.candidates_for_role(parsed, "owner")
-        self.assertEqual(c["owner_dusun"]["value"], "DUSUN BARU")
+        self.assertEqual(c["owner_dusun"]["value"], "Dusun Baru")
         self.assertEqual(c["owner_rt"]["value"], "001")
         self.assertEqual(c["owner_rw"]["value"], "002")
-        self.assertEqual(c["owner_desa"]["value"], "DESA KARTIKA")
-        self.assertEqual(c["owner_kecamatan"]["value"], "KECAMATAN KARTIKA")
+        self.assertEqual(c["owner_desa"]["value"], "Desa Kartika")
+        self.assertEqual(c["owner_kecamatan"]["value"], "Kecamatan Kartika")
         for stale in ("owner_alamat",):
             self.assertNotIn(stale, c)
 
@@ -303,7 +303,7 @@ class TestOcrResidenceMapping(unittest.TestCase):
         c = ktp_ocr.candidates_for_role(parsed, "owner")
         self.assertNotIn("owner_rt", c)
         self.assertNotIn("owner_rw", c)
-        self.assertEqual(c["owner_kecamatan"]["value"], "TEMANGGUNG")
+        self.assertEqual(c["owner_kecamatan"]["value"], "Temanggung")
 
     def test_local_spouse_and_debtor_roles_structured(self):
         parsed = ktp_ocr.parse_ktp_fields(self.SAMPLE)
@@ -326,9 +326,9 @@ class TestOcrResidenceMapping(unittest.TestCase):
         c = ktp_ocr.candidates_for_role(parsed, "owner")
         self.assertEqual(c["owner_rt"]["value"], "3")
         self.assertEqual(c["owner_rw"]["value"], "34")
-        self.assertEqual(c["owner_dusun"]["value"], "DUSUN KARTIKA")
-        self.assertEqual(c["owner_desa"]["value"], "DESA KARTIKA")
-        self.assertEqual(c["owner_kecamatan"]["value"], "KECAMATAN KARTIKA")
+        self.assertEqual(c["owner_dusun"]["value"], "Dusun Kartika")
+        self.assertEqual(c["owner_desa"]["value"], "Desa Kartika")
+        self.assertEqual(c["owner_kecamatan"]["value"], "Kecamatan Kartika")
         self.assertNotIn("owner_alamat", c)
 
     def test_ai_full_ktp_json_rt_rw_swapped(self):
@@ -343,7 +343,7 @@ class TestOcrResidenceMapping(unittest.TestCase):
         c = ktp_ocr.candidates_for_role(parsed, "owner")
         self.assertEqual(c["owner_rt"]["value"], "3")
         self.assertEqual(c["owner_rw"]["value"], "34")
-        self.assertEqual(c["owner_desa"]["value"], "DESA KARTIKA")
+        self.assertEqual(c["owner_desa"]["value"], "Desa Kartika")
 
     def test_ai_short_json_labelled_rt_rw_maps_structured(self):
         # Mode AI ringkas: "alamat" hanya nama dusun + label "rt_rw" -> struktur.
@@ -356,7 +356,7 @@ class TestOcrResidenceMapping(unittest.TestCase):
         c = ktp_ocr.candidates_for_role(parsed, "owner")
         self.assertEqual(c["owner_rt"]["value"], "3")
         self.assertEqual(c["owner_rw"]["value"], "34")
-        self.assertEqual(c["owner_dusun"]["value"], "DUSUN KARTIKA")
+        self.assertEqual(c["owner_dusun"]["value"], "Dusun Kartika")
 
     def test_ocr_does_not_overwrite_silently(self):
         # Nilai OCR hanya menjadi kandidat; validasi form tetap sumber terakhir.

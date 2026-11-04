@@ -168,9 +168,11 @@ def _dusun_text(value) -> str:
     """Teks dusun apa adanya.
 
     Pengguna mengisi placeholder dusun sendiri, jadi aplikasi TIDAK menambahkan
-    awalan "Dusun". Hanya spasi/tanda pisah berlebih dirapikan.
+    awalan "Dusun". Singkatan "Dsn"/"Dsn." di depan teks dibuang (lihat
+    ``textutil.strip_dusun_abbrev``) agar data manual/import ikut rapi. Hanya
+    spasi/tanda pisah berlebih dirapikan.
     """
-    return _clean(value).strip(" ,;.-")
+    return textutil.strip_dusun_abbrev(_clean(value)).strip(" ,;.-")
 
 
 def _rt_rw_text(value, label: str, required: bool):
@@ -443,7 +445,8 @@ def validate_and_build(data: dict) -> dict:
             if (required and text == ""
                     and key.split("_", 1)[-1] not in _RESIDENCE_PART_NAMES):
                 raise ValidationError(f"{label} wajib diisi.")
-            ctx[key] = text
+            ctx[key] = text.upper() if key in (
+                "owner_nama", "spouse_nama", "debtor_nama") else text
 
     if ctx["owner_title"].title() not in TITLES:
         raise ValidationError("Sapaan pemilik tanah tidak valid.")
@@ -558,8 +561,10 @@ def build_marker_values(ctx: dict) -> dict:
 
     # --- Nomor & tanggal akta --------------------------------------------
     values["nomor_akta"] = ctx["nomor_akta"]
-    values["tanggal_akta_lengkap"] = textutil.format_tanggal_lengkap(
-        ctx["tanggal_akta"])
+    tanggal, tahun = textutil.format_tanggal_lengkap(
+        ctx["tanggal_akta"]).rsplit(" (", 1)
+    values["tanggal_akta_lengkap"] = tanggal
+    values["tanggal_akta_tahun_terbilang"] = "(" + tahun
 
     # --- Identitas owner/spouse/debtor -----------------------------------
     for role in _ROLES:
@@ -659,6 +664,7 @@ def format_spouse_alamat(ctx: dict) -> str:
 REQUIRED_MARKER_KEYS = (
     "nomor_akta",
     "tanggal_akta_lengkap",
+    "tanggal_akta_tahun_terbilang",
     "owner_title", "owner_nama", "owner_lahir_tempat",
     "owner_lahir_tanggal_kata", "owner_lahir_tanggal_singkat",
     "owner_pekerjaan", "owner_alamat", "owner_nik",
