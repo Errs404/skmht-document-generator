@@ -24,7 +24,7 @@ import zipfile
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import quote
 
-from . import ai_ocr, docx_template, drafts, fields, ktp_ocr
+from . import ai_ocr, docx_template, drafts, fields, ktp_ocr, pdf_ocr, pdf_ui
 from .textutil import ValidationError
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -440,6 +440,9 @@ class Handler(BaseHTTPRequestHandler):
 
     # ------------------------------------------------------------------
     def do_POST(self):  # noqa: N802
+        if self.path in ('/api/pdf/inspect', '/api/pdf/page'):
+            self._handle_pdf()
+            return
         if self.path == "/api/ocr/ktp":
             self._handle_ocr()
             return
@@ -745,6 +748,46 @@ class Handler(BaseHTTPRequestHandler):
                         "ulang; konfirmasi tiap kolom bertanda tinjau sebelum "
                         "membuat dokumen."),
         })
+
+    def _handle_pdf(self):
+        # Same-origin JSON only; never accept cross-site PDF/cloud requests.
+        origin = self.headers.get('Origin')
+        host = self.headers.get('Host', '')
+        if (host.split(':')[0] not in ('127.0.0.1', 'localhost') or
+                (origin and origin not in ('http://' + host, 'https://' + host))):
+            self._send_json(403, {'ok': False, 'error': 'Asal permintaan ditolak.'})
+            return
+        if not self.headers.get('Content-Type', '').startswith('application/json'):
+            self._send_json(415, {'ok': False, 'error': 'Gunakan JSON.'})
+            return
+        if not _ocr_semaphore.acquire(blocking=False):
+            self._send_json(429, {'ok': False, 'error': 'OCR sibuk. Coba lagi.'})
+            return
+        try:
+            data = self._read_json_body(41 * 1024 * 1024)
+            if data is None:
+                return
+            if self.path == '/api/pdf/page' and data.get('consent') is not True:
+                raise ai_ocr.ConsentRequired('Persetujuan AI diperlukan untuk permintaan ini.')
+            encoded = data.get('pdf_base64')
+            if not isinstance(encoded, str):
+                raise ValueError()
+            try:
+                blob = base64.b64decode(encoded, validate=True)
+            except (ValueError, binascii.Error):
+                raise ValueError() from None
+            if self.path == '/api/pdf/inspect':
+                result = pdf_ocr.inspect_pdf(blob)
+            else:
+                result = pdf_ocr.extract_page(blob, data.get('page'),
+                                              data.get('category'), consent=True)
+            self._send_json(200, dict(result, ok=True))
+        except (ai_ocr.AiOcrError, pdf_ocr.PdfError) as exc:
+            self._send_json(422, {'ok': False, 'error': str(exc)})
+        except (ValueError, TypeError):
+            self._send_json(422, {'ok': False, 'error': 'Payload PDF tidak valid.'})
+        finally:
+            _ocr_semaphore.release()
 
     def _read_ocr_request(self):
         """Baca & validasi payload OCR bersama untuk kedua mode.
@@ -1385,7 +1428,7 @@ APP_JS = """
   var reviewState = {
     reviewed: false, digest: null, ackToken: null, summarySignature: null,
     summary: null, ocrData: {}, ocrPending: [], draftSource: null,
-    imported: false, acknowledged: false
+    imported: false, acknowledged: false, sources: {}
   };
   var reviewSeq = 0;
 
@@ -2173,3 +2216,9 @@ APP_JS = """
   wireOcr();
 })();
 """
+
+INDEX_HTML = INDEX_HTML.replace('  <form id="form"',
+                                pdf_ui.HTML + '\n  <form id="form"')
+APP_JS = APP_JS.replace('  wireOcr();\n})();',
+                        pdf_ui.JS + '\n  wireOcr();\n})();')
+

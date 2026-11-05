@@ -68,6 +68,12 @@ MAX_IMAGE_BYTES = ktp_ocr.MAX_IMAGE_BYTES
 
 #: Kunci skema yang diizinkan pada JSON keluaran penyedia. Selain ini
 #: diabaikan (tidak dipakai, tidak dipercaya).
+AI_KEY_ALIASES = {
+    "tempat_tanggal_lahir": "tempat_lahir",
+    "desa": "kel_desa",
+    "kelurahan": "kel_desa",
+}
+
 ALLOWED_KEYS = (
     "nik",
     "nama",
@@ -193,6 +199,59 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 _OPENER = urllib.request.build_opener(_NoRedirect)
 
 
+def _request_json(
+    api_key: str,
+    prompt: str,
+    parts: list[tuple[bytes, str]],
+    *,
+    max_output_tokens: int = MAX_OUTPUT_TOKENS,
+    json_mode: bool = False,
+) -> str:
+    """Kirim satu permintaan chat-completions berisi teks + gambar.
+
+    ``parts`` berisi pasangan ``(bytes_gambar, jenis)``; ``jenis`` adalah
+    keluaran ``ktp_ocr.validate_image`` ("jpeg"/"png") sehingga isi berkas
+    tetap divalidasi dari tanda tangannya, bukan dari nama/klaim klien.
+
+    Protokol sama dengan OCR KTP: tanpa SDK, tanpa redirect, tanpa logging
+    payload, batas ukuran balasan dan batas waktu dari konfigurasi yang
+    sudah ada. Mengembalikan teks isi pesan asisten (data tak terpercaya).
+    Kunci API sudah diurus pemanggil (tidak pernah dikembalikan/ditulis).
+    """
+    content: list[dict] = [{"type": "text", "text": prompt}]
+    for data, kind in parts:
+        b64 = base64.b64encode(bytes(data)).decode("ascii")
+        content.append({
+            "type": "image_url",
+            "image_url": {"url": f"data:{_mime_for(kind)};base64,{b64}"},
+        })
+    body = {
+        "model": model_name(),
+        "messages": [{"role": "user", "content": content}],
+        "temperature": 0,
+        "max_tokens": int(max_output_tokens),
+    }
+    # Opt-in: other compatible providers/callers retain their existing contract.
+    # No fallback retry: unsupported JSON mode is a single, visible HTTP error.
+    if json_mode:
+        body["response_format"] = {"type": "json_object"}
+    payload = json.dumps(body).encode("utf-8")
+    headers = {
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    request = urllib.request.Request(
+        f"{base_url()}/chat/completions",
+        data=payload,
+        method="POST",
+        headers=headers,
+    )
+    raw = _post(request)
+    return _read_choice_content(raw.encode("utf-8"))
+
+
 def _extract_json_object(text: str) -> str:
     """Ambil objek JSON pertama dari teks balasan secara deterministik.
 
@@ -227,8 +286,12 @@ def _parse_provider_json(text: str) -> dict:
     if not isinstance(data, dict):
         raise AiOcrError("Balasan AI tidak berisi objek JSON.")
     clean: dict[str, str] = {}
+    normalized = dict(data)
+    for alias, canonical in AI_KEY_ALIASES.items():
+        if not normalized.get(canonical) and normalized.get(alias):
+            normalized[canonical] = normalized[alias]
     for key in ALLOWED_KEYS:
-        value = data.get(key)
+        value = normalized.get(key)
         if value is None:
             continue
         if not isinstance(value, (str, int, float)):
@@ -292,6 +355,11 @@ def _read_choice_content(body: bytes) -> str:
     choices = parsed.get("choices")
     if not isinstance(choices, list) or not choices:
         raise AiOcrError("Penyedia AI tidak mengembalikan hasil.")
+    finish = choices[0].get("finish_reason") if isinstance(choices[0], dict) else None
+    if finish in ("length", "max_tokens", "MAX_TOKENS"):
+        raise AiOcrError("Balasan AI terpotong karena batas token; hasil tidak digunakan. Tidak ada retry otomatis.")
+    if finish in ("content_filter", "tool_calls", "function_call"):
+        raise AiOcrError("Penyedia AI tidak menyelesaikan transkripsi JSON; hasil tidak digunakan.")
     message = choices[0].get("message") if isinstance(choices[0], dict) else None
     if not isinstance(message, dict):
         raise AiOcrError("Balasan AI tidak dapat dibaca.")
